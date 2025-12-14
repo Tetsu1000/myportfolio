@@ -1,0 +1,38 @@
+:root{--fg:#0f172a;--muted:#64748b;--bg:#f8fafc;--line:#e2e8f0;}
+html,body{height:100%}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--fg);background:linear-gradient(#fff,var(--bg))}
+.wrap{max-width:1200px;margin:22px auto;padding:0 16px}
+.h1{font-size:28px;margin:0 0 16px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 6px 20px rgba(2,6,23,.06);padding:16px}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;margin:14px 0 16px}
+.brand{font-weight:800}
+.nav{display:flex;gap:10px}
+.navlink{padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;text-decoration:none;color:var(--fg)}
+.navlink:hover{background:#f1f5f9}
+
+.label{font-size:12px;color:var(--muted);margin-bottom:6px}
+.muted{color:#64748b;font-size:12px}
+.small{font-size:12px;color:#64748b;word-break:break-all}
+
+input,select{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:14px}
+
+.filterbar{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin:8px 0 10px}
+.clearbtn{background:#f1f5f9;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;cursor:pointer}
+.clearbtn:hover{background:#e2e8f0}
+
+.tag{font-size:12px;color:#475569;background:#e2e8f0;border-radius:8px;padding:2px 6px}
+
+.hdr{display:grid;grid-template-columns:1.6fr .9fr .7fr .8fr;gap:10px;margin:4px 0 8px;font-size:12px;color:#64748b}
+.list{display:flex;flex-direction:column;gap:8px;max-height:70vh;overflow:auto}
+
+.rowitem{display:grid;grid-template-columns:1.6fr .9fr .7fr .8fr;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:8px 10px;cursor:pointer;background:#fff;text-decoration:none;color:inherit}
+.rowitem:hover{background:#f1f5f9}
+
+.pill{padding:2px 8px;border-radius:999px;color:#fff;font-weight:600;display:inline-block}
+.pill.great{background:#065f46}
+.pill.good{background:#34d399}
+.pill.neu{background:#f59e0b}
+.pill.sell{background:#dc2626}
+
+.statusrow{display:flex;align-items:center;justify-content:space-between}
