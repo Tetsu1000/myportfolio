@@ -1,11 +1,10 @@
+"use client";
+
+import { useParams } from "next/navigation";
 import StockChart from "@/components/StockChart";
 
-export default async function StockPage({
-  params,
-}: {
-  params: Promise<{ ticker: string }>;
-}) {
-  const { ticker } = await params;
+export default function StockPage() {
+  const { ticker } = useParams<{ ticker: string }>();
 
   return (
     <>
