@@ -1,7 +1,11 @@
 import StockChart from "@/components/StockChart";
 
-export default function StockPage({ params }: { params: { ticker: string } }) {
-  const { ticker } = params;
+export default async function StockPage({
+  params,
+}: {
+  params: Promise<{ ticker: string }>;
+}) {
+  const { ticker } = await params;
 
   return (
     <>
