@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createChart,
   ColorType,
-  IChartApi,
   UTCTimestamp,
 } from "lightweight-charts";
 import type { Candle } from "@/lib/indicators";
@@ -12,7 +11,7 @@ import { sma, bollinger, rsi, macd } from "@/lib/indicators";
 import { fetchDailyCandles } from "@/lib/marketdata";
 
 function toTs(dateStr: string): UTCTimestamp {
-  // YYYY-MM-DD を UTC timestamp に
+  // YYYY-MM-DD -> UTC timestamp (seconds)
   const [y, m, d] = dateStr.split("-").map(Number);
   const t = Date.UTC(y, (m ?? 1) - 1, d ?? 1) / 1000;
   return t as UTCTimestamp;
@@ -26,6 +25,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [err, setErr] = useState<string>("");
 
+  // データ取得
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -52,15 +52,16 @@ export default function StockChart({ ticker }: { ticker: string }) {
   const rsi14 = useMemo(() => rsi(closeArr, 14), [closeArr]);
   const m = useMemo(() => macd(closeArr, 12, 26, 9), [closeArr]);
 
-  // メイン（ロウソク足 + 出来高 + MA + BB）
+  // メインチャート（ロウソク + 出来高 + MA + BB）
   useEffect(() => {
     if (!containerRef.current) return;
-    if (candles.length < 30) return;
+    if (candles.length < 5) return;
 
     const el = containerRef.current;
     el.innerHTML = "";
 
     const chart = createChart(el, {
+      width: el.clientWidth || 800, // ★幅0対策
       height: 420,
       layout: {
         background: { type: ColorType.Solid, color: "white" },
@@ -72,6 +73,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
     });
 
     const candleSeries = chart.addCandlestickSeries();
+
     const volumeSeries = chart.addHistogramSeries({
       priceFormat: { type: "volume" },
       priceScaleId: "",
@@ -84,53 +86,67 @@ export default function StockChart({ ticker }: { ticker: string }) {
     const bbM = chart.addLineSeries({ lineWidth: 1 });
     const bbL = chart.addLineSeries({ lineWidth: 1 });
 
-    const cData = candles.map((c) => ({
-      time: toTs(c.time),
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close,
-    }));
+    candleSeries.setData(
+      candles.map((c) => ({
+        time: toTs(c.time),
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+      }))
+    );
 
-    const vData = candles.map((c) => ({
-      time: toTs(c.time),
-      value: c.volume,
-    }));
-
-    candleSeries.setData(cData);
-    volumeSeries.setData(vData);
+    volumeSeries.setData(
+      candles.map((c) => ({
+        time: toTs(c.time),
+        value: c.volume,
+      }))
+    );
 
     ma20Series.setData(
       candles
-        .map((c, i) => (ma20[i] == null ? null : { time: toTs(c.time), value: ma20[i] as number }))
+        .map((c, i) =>
+          ma20[i] == null ? null : { time: toTs(c.time), value: ma20[i] as number }
+        )
         .filter(Boolean) as any
     );
+
     ma50Series.setData(
       candles
-        .map((c, i) => (ma50[i] == null ? null : { time: toTs(c.time), value: ma50[i] as number }))
+        .map((c, i) =>
+          ma50[i] == null ? null : { time: toTs(c.time), value: ma50[i] as number }
+        )
         .filter(Boolean) as any
     );
 
     bbU.setData(
       candles
-        .map((c, i) => (bb.upper[i] == null ? null : { time: toTs(c.time), value: bb.upper[i] as number }))
+        .map((c, i) =>
+          bb.upper[i] == null ? null : { time: toTs(c.time), value: bb.upper[i] as number }
+        )
         .filter(Boolean) as any
     );
+
     bbM.setData(
       candles
-        .map((c, i) => (bb.mid[i] == null ? null : { time: toTs(c.time), value: bb.mid[i] as number }))
+        .map((c, i) =>
+          bb.mid[i] == null ? null : { time: toTs(c.time), value: bb.mid[i] as number }
+        )
         .filter(Boolean) as any
     );
+
     bbL.setData(
       candles
-        .map((c, i) => (bb.lower[i] == null ? null : { time: toTs(c.time), value: bb.lower[i] as number }))
+        .map((c, i) =>
+          bb.lower[i] == null ? null : { time: toTs(c.time), value: bb.lower[i] as number }
+        )
         .filter(Boolean) as any
     );
 
     chart.timeScale().fitContent();
 
     const onResize = () => {
-      chart.applyOptions({ width: el.clientWidth });
+      chart.applyOptions({ width: el.clientWidth || 800 }); // ★幅0対策
     };
     window.addEventListener("resize", onResize);
     onResize();
@@ -141,15 +157,16 @@ export default function StockChart({ ticker }: { ticker: string }) {
     };
   }, [candles, ma20, ma50, bb]);
 
-  // RSIチャート
+  // RSI
   useEffect(() => {
     if (!rsiRef.current) return;
-    if (candles.length < 30) return;
+    if (candles.length < 5) return;
 
     const el = rsiRef.current;
     el.innerHTML = "";
 
     const chart = createChart(el, {
+      width: el.clientWidth || 800, // ★幅0対策
       height: 160,
       layout: {
         background: { type: ColorType.Solid, color: "white" },
@@ -161,6 +178,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
     });
 
     const s = chart.addLineSeries({ lineWidth: 2 });
+
     s.setData(
       candles
         .map((c, i) =>
@@ -170,7 +188,10 @@ export default function StockChart({ ticker }: { ticker: string }) {
     );
 
     chart.timeScale().fitContent();
-    const onResize = () => chart.applyOptions({ width: el.clientWidth });
+
+    const onResize = () => {
+      chart.applyOptions({ width: el.clientWidth || 800 }); // ★幅0対策
+    };
     window.addEventListener("resize", onResize);
     onResize();
 
@@ -180,15 +201,16 @@ export default function StockChart({ ticker }: { ticker: string }) {
     };
   }, [candles, rsi14]);
 
-  // MACDチャート（line & signal & hist）
+  // MACD（line/signal/hist）
   useEffect(() => {
     if (!macdRef.current) return;
-    if (candles.length < 60) return;
+    if (candles.length < 10) return;
 
     const el = macdRef.current;
     el.innerHTML = "";
 
     const chart = createChart(el, {
+      width: el.clientWidth || 800, // ★幅0対策
       height: 200,
       layout: {
         background: { type: ColorType.Solid, color: "white" },
@@ -210,6 +232,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
         )
         .filter(Boolean) as any
     );
+
     line.setData(
       candles
         .map((c, i) =>
@@ -217,6 +240,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
         )
         .filter(Boolean) as any
     );
+
     sig.setData(
       candles
         .map((c, i) =>
@@ -226,7 +250,10 @@ export default function StockChart({ ticker }: { ticker: string }) {
     );
 
     chart.timeScale().fitContent();
-    const onResize = () => chart.applyOptions({ width: el.clientWidth });
+
+    const onResize = () => {
+      chart.applyOptions({ width: el.clientWidth || 800 }); // ★幅0対策
+    };
     window.addEventListener("resize", onResize);
     onResize();
 
@@ -243,6 +270,11 @@ export default function StockChart({ ticker }: { ticker: string }) {
         <div className="muted">ticker: {ticker}</div>
       </div>
 
+      {/* ★追加：データ件数を可視化 */}
+      <div className="muted" style={{ marginTop: 6 }}>
+        candles: {candles.length}件
+      </div>
+
       {err ? (
         <div className="muted" style={{ marginTop: 10 }}>
           データ取得エラー: {err}
@@ -250,17 +282,18 @@ export default function StockChart({ ticker }: { ticker: string }) {
       ) : null}
 
       <div style={{ marginTop: 10 }}>
-        <div ref={containerRef} />
+        {/* ★追加：minHeightで描画領域を確保 */}
+        <div ref={containerRef} style={{ minHeight: 420 }} />
       </div>
 
       <div style={{ marginTop: 14 }}>
         <div style={{ fontWeight: 700, marginBottom: 6 }}>RSI(14)</div>
-        <div ref={rsiRef} />
+        <div ref={rsiRef} style={{ minHeight: 160 }} />
       </div>
 
       <div style={{ marginTop: 14 }}>
         <div style={{ fontWeight: 700, marginBottom: 6 }}>MACD(12,26,9)</div>
-        <div ref={macdRef} />
+        <div ref={macdRef} style={{ minHeight: 200 }} />
       </div>
 
       <div className="muted" style={{ marginTop: 8 }}>
