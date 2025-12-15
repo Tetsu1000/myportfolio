@@ -1,56 +1,41 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createChart, ColorType, UTCTimestamp } from "lightweight-charts";
-import type { Candle } from "@/lib/indicators";
-import { sma, bollinger, rsi, macd } from "@/lib/indicators";
-import { fetchDailyCandles } from "@/lib/marketdata";
+import { useEffect, useRef, useState } from "react";
+import {
+  createChart,
+  ColorType,
+  CandlestickSeries,
+  HistogramSeries,
+} from "lightweight-charts";
 
-function toTs(dateStr: string): UTCTimestamp {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const t = Date.UTC(y, (m ?? 1) - 1, d ?? 1) / 1000;
-  return t as UTCTimestamp;
-}
-
-// ★あなたの環境では addCandlestickSeries が無いので createSeries を使う
-function addCandles(chart: any) {
-  if (typeof chart.createSeries === "function") return chart.createSeries("Candlestick", {});
-  // もし古い版ならこっち
-  if (typeof chart.addCandlestickSeries === "function") return chart.addCandlestickSeries();
-  throw new Error("Candlestick series API not found");
-}
-
-function addHistogram(chart: any, options: any) {
-  if (typeof chart.createSeries === "function") return chart.createSeries("Histogram", options);
-  if (typeof chart.addHistogramSeries === "function") return chart.addHistogramSeries(options);
-  throw new Error("Histogram series API not found");
-}
-
-function addLine(chart: any, options: any) {
-  if (typeof chart.createSeries === "function") return chart.createSeries("Line", options);
-  if (typeof chart.addLineSeries === "function") return chart.addLineSeries(options);
-  throw new Error("Line series API not found");
-}
+type Candle = {
+  time: string; // "YYYY-MM-DD"
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
 
 export default function StockChart({ ticker }: { ticker: string }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const rsiRef = useRef<HTMLDivElement | null>(null);
-  const macdRef = useRef<HTMLDivElement | null>(null);
-
   const [candles, setCandles] = useState<Candle[]>([]);
-  const [err, setErr] = useState<string>("");
+  const [err, setErr] = useState("");
 
+  // 日足データ取得（/api/candles を叩く）
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         setErr("");
-        const data = await fetchDailyCandles(ticker);
-        if (!mounted) return;
-        setCandles(data);
+        const res = await fetch(`/api/candles?ticker=${encodeURIComponent(ticker)}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`candles API error: ${res.status}`);
+        const data = (await res.json()) as Candle[];
+        if (mounted) setCandles(data);
       } catch (e: any) {
-        if (!mounted) return;
-        setErr(e?.message ?? String(e));
+        if (mounted) setErr(e?.message ?? String(e));
       }
     })();
     return () => {
@@ -58,14 +43,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
     };
   }, [ticker]);
 
-  const closeArr = useMemo(() => candles.map((c) => c.close), [candles]);
-  const ma20 = useMemo(() => sma(closeArr, 20), [closeArr]);
-  const ma50 = useMemo(() => sma(closeArr, 50), [closeArr]);
-  const bb = useMemo(() => bollinger(closeArr, 20, 2), [closeArr]);
-  const rsi14 = useMemo(() => rsi(closeArr, 14), [closeArr]);
-  const m = useMemo(() => macd(closeArr, 12, 26, 9), [closeArr]);
-
-  // メインチャート
+  // チャート描画
   useEffect(() => {
     if (!containerRef.current) return;
     if (candles.length < 5) return;
@@ -73,8 +51,8 @@ export default function StockChart({ ticker }: { ticker: string }) {
     const el = containerRef.current;
     el.innerHTML = "";
 
-    const chart = createChart(el, {
-      width: el.clientWidth || 800,
+    const chart: any = createChart(el, {
+      width: el.clientWidth || 900,
       height: 420,
       layout: {
         background: { type: ColorType.Solid, color: "white" },
@@ -85,23 +63,17 @@ export default function StockChart({ ticker }: { ticker: string }) {
       timeScale: { borderVisible: false },
     });
 
-    const candleSeries = addCandles(chart);
-
-    const volumeSeries = addHistogram(chart, {
+    // ✅ v5: addSeries を使う（これが正解）
+    const candleSeries: any = chart.addSeries(CandlestickSeries, {});
+    const volumeSeries: any = chart.addSeries(HistogramSeries, {
       priceFormat: { type: "volume" },
       priceScaleId: "",
       scaleMargins: { top: 0.75, bottom: 0 },
     });
 
-    const ma20Series = addLine(chart, { lineWidth: 2 });
-    const ma50Series = addLine(chart, { lineWidth: 2 });
-    const bbU = addLine(chart, { lineWidth: 1 });
-    const bbM = addLine(chart, { lineWidth: 1 });
-    const bbL = addLine(chart, { lineWidth: 1 });
-
     candleSeries.setData(
       candles.map((c) => ({
-        time: toTs(c.time),
+        time: c.time, // 文字列でOK
         open: c.open,
         high: c.high,
         low: c.low,
@@ -111,48 +83,14 @@ export default function StockChart({ ticker }: { ticker: string }) {
 
     volumeSeries.setData(
       candles.map((c) => ({
-        time: toTs(c.time),
+        time: c.time,
         value: c.volume,
       }))
     );
 
-    ma20Series.setData(
-      candles
-        .map((c, i) => (ma20[i] == null ? null : { time: toTs(c.time), value: ma20[i] as number }))
-        .filter(Boolean) as any
-    );
-
-    ma50Series.setData(
-      candles
-        .map((c, i) => (ma50[i] == null ? null : { time: toTs(c.time), value: ma50[i] as number }))
-        .filter(Boolean) as any
-    );
-
-    bbU.setData(
-      candles
-        .map((c, i) =>
-          bb.upper[i] == null ? null : { time: toTs(c.time), value: bb.upper[i] as number }
-        )
-        .filter(Boolean) as any
-    );
-    bbM.setData(
-      candles
-        .map((c, i) =>
-          bb.mid[i] == null ? null : { time: toTs(c.time), value: bb.mid[i] as number }
-        )
-        .filter(Boolean) as any
-    );
-    bbL.setData(
-      candles
-        .map((c, i) =>
-          bb.lower[i] == null ? null : { time: toTs(c.time), value: bb.lower[i] as number }
-        )
-        .filter(Boolean) as any
-    );
-
     chart.timeScale().fitContent();
 
-    const onResize = () => chart.applyOptions({ width: el.clientWidth || 800 });
+    const onResize = () => chart.applyOptions({ width: el.clientWidth || 900 });
     window.addEventListener("resize", onResize);
     onResize();
 
@@ -160,103 +98,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
       window.removeEventListener("resize", onResize);
       chart.remove();
     };
-  }, [candles, ma20, ma50, bb]);
-
-  // RSI
-  useEffect(() => {
-    if (!rsiRef.current) return;
-    if (candles.length < 5) return;
-
-    const el = rsiRef.current;
-    el.innerHTML = "";
-
-    const chart = createChart(el, {
-      width: el.clientWidth || 800,
-      height: 160,
-      layout: {
-        background: { type: ColorType.Solid, color: "white" },
-        textColor: "#0f172a",
-      },
-      rightPriceScale: { borderVisible: false },
-      timeScale: { borderVisible: false },
-      grid: { vertLines: { visible: false }, horzLines: { visible: false } },
-    });
-
-    const s = addLine(chart, { lineWidth: 2 });
-
-    s.setData(
-      candles
-        .map((c, i) => (rsi14[i] == null ? null : { time: toTs(c.time), value: rsi14[i] as number }))
-        .filter(Boolean) as any
-    );
-
-    chart.timeScale().fitContent();
-
-    const onResize = () => chart.applyOptions({ width: el.clientWidth || 800 });
-    window.addEventListener("resize", onResize);
-    onResize();
-
-    return () => {
-      window.removeEventListener("resize", onResize);
-      chart.remove();
-    };
-  }, [candles, rsi14]);
-
-  // MACD
-  useEffect(() => {
-    if (!macdRef.current) return;
-    if (candles.length < 10) return;
-
-    const el = macdRef.current;
-    el.innerHTML = "";
-
-    const chart = createChart(el, {
-      width: el.clientWidth || 800,
-      height: 200,
-      layout: {
-        background: { type: ColorType.Solid, color: "white" },
-        textColor: "#0f172a",
-      },
-      rightPriceScale: { borderVisible: false },
-      timeScale: { borderVisible: false },
-      grid: { vertLines: { visible: false }, horzLines: { visible: false } },
-    });
-
-    const hist = addHistogram(chart, { priceScaleId: "" });
-    const line = addLine(chart, { lineWidth: 2 });
-    const sig = addLine(chart, { lineWidth: 2 });
-
-    hist.setData(
-      candles
-        .map((c, i) => (m.hist[i] == null ? null : { time: toTs(c.time), value: m.hist[i] as number }))
-        .filter(Boolean) as any
-    );
-
-    line.setData(
-      candles
-        .map((c, i) => (m.line[i] == null ? null : { time: toTs(c.time), value: m.line[i] as number }))
-        .filter(Boolean) as any
-    );
-
-    sig.setData(
-      candles
-        .map((c, i) =>
-          m.signal[i] == null ? null : { time: toTs(c.time), value: m.signal[i] as number }
-        )
-        .filter(Boolean) as any
-    );
-
-    chart.timeScale().fitContent();
-
-    const onResize = () => chart.applyOptions({ width: el.clientWidth || 800 });
-    window.addEventListener("resize", onResize);
-    onResize();
-
-    return () => {
-      window.removeEventListener("resize", onResize);
-      chart.remove();
-    };
-  }, [candles, m]);
+  }, [candles]);
 
   return (
     <div className="card">
@@ -277,20 +119,6 @@ export default function StockChart({ ticker }: { ticker: string }) {
 
       <div style={{ marginTop: 10 }}>
         <div ref={containerRef} style={{ minHeight: 420 }} />
-      </div>
-
-      <div style={{ marginTop: 14 }}>
-        <div style={{ fontWeight: 700, marginBottom: 6 }}>RSI(14)</div>
-        <div ref={rsiRef} style={{ minHeight: 160 }} />
-      </div>
-
-      <div style={{ marginTop: 14 }}>
-        <div style={{ fontWeight: 700, marginBottom: 6 }}>MACD(12,26,9)</div>
-        <div ref={macdRef} style={{ minHeight: 200 }} />
-      </div>
-
-      <div className="muted" style={{ marginTop: 8 }}>
-        ※ 現在はダミー日足データで表示中（後で本物のデータソースに差し替えます）
       </div>
     </div>
   );
