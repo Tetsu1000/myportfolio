@@ -12,35 +12,24 @@ function toTs(dateStr: string): UTCTimestamp {
   return t as UTCTimestamp;
 }
 
-// lightweight-charts のバージョン差吸収（new API / old API）
+// ★あなたの環境では addCandlestickSeries が無いので createSeries を使う
 function addCandles(chart: any) {
-  if (typeof chart.addCandlestickSeries === "function") {
-    return chart.addCandlestickSeries();
-  }
-  if (typeof chart.createSeries === "function") {
-    return chart.createSeries("Candlestick", {});
-  }
-  throw new Error("Candlestick series API not found (lightweight-charts)");
+  if (typeof chart.createSeries === "function") return chart.createSeries("Candlestick", {});
+  // もし古い版ならこっち
+  if (typeof chart.addCandlestickSeries === "function") return chart.addCandlestickSeries();
+  throw new Error("Candlestick series API not found");
 }
 
 function addHistogram(chart: any, options: any) {
-  if (typeof chart.addHistogramSeries === "function") {
-    return chart.addHistogramSeries(options);
-  }
-  if (typeof chart.createSeries === "function") {
-    return chart.createSeries("Histogram", options);
-  }
-  throw new Error("Histogram series API not found (lightweight-charts)");
+  if (typeof chart.createSeries === "function") return chart.createSeries("Histogram", options);
+  if (typeof chart.addHistogramSeries === "function") return chart.addHistogramSeries(options);
+  throw new Error("Histogram series API not found");
 }
 
 function addLine(chart: any, options: any) {
-  if (typeof chart.addLineSeries === "function") {
-    return chart.addLineSeries(options);
-  }
-  if (typeof chart.createSeries === "function") {
-    return chart.createSeries("Line", options);
-  }
-  throw new Error("Line series API not found (lightweight-charts)");
+  if (typeof chart.createSeries === "function") return chart.createSeries("Line", options);
+  if (typeof chart.addLineSeries === "function") return chart.addLineSeries(options);
+  throw new Error("Line series API not found");
 }
 
 export default function StockChart({ ticker }: { ticker: string }) {
@@ -70,7 +59,6 @@ export default function StockChart({ ticker }: { ticker: string }) {
   }, [ticker]);
 
   const closeArr = useMemo(() => candles.map((c) => c.close), [candles]);
-
   const ma20 = useMemo(() => sma(closeArr, 20), [closeArr]);
   const ma50 = useMemo(() => sma(closeArr, 50), [closeArr]);
   const bb = useMemo(() => bollinger(closeArr, 20, 2), [closeArr]);
@@ -130,17 +118,13 @@ export default function StockChart({ ticker }: { ticker: string }) {
 
     ma20Series.setData(
       candles
-        .map((c, i) =>
-          ma20[i] == null ? null : { time: toTs(c.time), value: ma20[i] as number }
-        )
+        .map((c, i) => (ma20[i] == null ? null : { time: toTs(c.time), value: ma20[i] as number }))
         .filter(Boolean) as any
     );
 
     ma50Series.setData(
       candles
-        .map((c, i) =>
-          ma50[i] == null ? null : { time: toTs(c.time), value: ma50[i] as number }
-        )
+        .map((c, i) => (ma50[i] == null ? null : { time: toTs(c.time), value: ma50[i] as number }))
         .filter(Boolean) as any
     );
 
@@ -202,9 +186,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
 
     s.setData(
       candles
-        .map((c, i) =>
-          rsi14[i] == null ? null : { time: toTs(c.time), value: rsi14[i] as number }
-        )
+        .map((c, i) => (rsi14[i] == null ? null : { time: toTs(c.time), value: rsi14[i] as number }))
         .filter(Boolean) as any
     );
 
@@ -246,17 +228,13 @@ export default function StockChart({ ticker }: { ticker: string }) {
 
     hist.setData(
       candles
-        .map((c, i) =>
-          m.hist[i] == null ? null : { time: toTs(c.time), value: m.hist[i] as number }
-        )
+        .map((c, i) => (m.hist[i] == null ? null : { time: toTs(c.time), value: m.hist[i] as number }))
         .filter(Boolean) as any
     );
 
     line.setData(
       candles
-        .map((c, i) =>
-          m.line[i] == null ? null : { time: toTs(c.time), value: m.line[i] as number }
-        )
+        .map((c, i) => (m.line[i] == null ? null : { time: toTs(c.time), value: m.line[i] as number }))
         .filter(Boolean) as any
     );
 
