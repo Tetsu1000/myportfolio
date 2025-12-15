@@ -1,51 +1,57 @@
 import { NextResponse } from "next/server";
 
-function iso(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+type Candle = {
+  time: string; // YYYY-MM-DD
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
+function toStooqSymbol(ticker: string) {
+  // 例: 7203.T -> 7203.jp
+  const t = ticker.trim();
+  if (t.endsWith(".T")) return t.replace(/\.T$/, ".jp").toLowerCase();
+  return t.toLowerCase();
 }
 
-// ダミーのランダムウォーク日足（約1年分）
-function generateDummy() {
-  const out: any[] = [];
-  const today = new Date();
-  let price = 1000 + Math.random() * 2000;
-
-  for (let i = 260; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-
-    const drift = (Math.random() - 0.5) * 30;
-    const open = price;
-    const close = Math.max(10, open + drift);
-    const high = Math.max(open, close) + Math.random() * 20;
-    const low = Math.min(open, close) - Math.random() * 20;
-    const vol = Math.floor(100000 + Math.random() * 400000);
-
-    out.push({
-      time: iso(d),
-      open: Math.round(open),
-      high: Math.round(high),
-      low: Math.round(low),
-      close: Math.round(close),
-      volume: vol,
-    });
-
-    price = close;
+function parseCSV(csv: string): Candle[] {
+  const lines = csv.trim().split(/\r?\n/);
+  // Date,Open,High,Low,Close,Volume
+  const out: Candle[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(",");
+    if (cols.length < 6) continue;
+    const [date, o, h, l, c, v] = cols;
+    const open = Number(o), high = Number(h), low = Number(l), close = Number(c), volume = Number(v);
+    if (!date || !Number.isFinite(open) || !Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) continue;
+    out.push({ time: date, open, high, low, close, volume: Number.isFinite(volume) ? volume : 0 });
   }
   return out;
 }
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const ticker = searchParams.get("ticker") ?? "UNKNOWN";
+  const url = new URL(req.url);
+  const ticker = url.searchParams.get("ticker") ?? "";
+  if (!ticker) {
+    return NextResponse.json({ error: "ticker is required" }, { status: 400 });
+  }
 
-  // まずはダミーで返す（後で ticker で本物を返すように差し替え）
-  const candles = generateDummy();
+  const sym = toStooqSymbol(ticker);
+  const stooq = `https://stooq.com/q/d/l/?s=${encodeURIComponent(sym)}&i=d`;
 
-  return NextResponse.json(candles, {
-    headers: { "x-note": `dummy candles for ${ticker}` },
-  });
+  const res = await fetch(stooq, { cache: "no-store" });
+  if (!res.ok) {
+    return NextResponse.json({ error: `stooq fetch failed: ${res.status}` }, { status: 502 });
+  }
+  const csv = await res.text();
+  const data = parseCSV(csv);
+
+  // データが取れない場合は分かりやすく返す
+  if (!data.length) {
+    return NextResponse.json({ error: "no candles returned (check ticker mapping)" }, { status: 404 });
+  }
+
+  return NextResponse.json(data);
 }
