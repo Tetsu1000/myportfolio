@@ -1,20 +1,46 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  createChart,
-  ColorType,
-  UTCTimestamp,
-} from "lightweight-charts";
+import { createChart, ColorType, UTCTimestamp } from "lightweight-charts";
 import type { Candle } from "@/lib/indicators";
 import { sma, bollinger, rsi, macd } from "@/lib/indicators";
 import { fetchDailyCandles } from "@/lib/marketdata";
 
 function toTs(dateStr: string): UTCTimestamp {
-  // YYYY-MM-DD -> UTC timestamp (seconds)
   const [y, m, d] = dateStr.split("-").map(Number);
   const t = Date.UTC(y, (m ?? 1) - 1, d ?? 1) / 1000;
   return t as UTCTimestamp;
+}
+
+// lightweight-charts のバージョン差吸収（new API / old API）
+function addCandles(chart: any) {
+  if (typeof chart.addCandlestickSeries === "function") {
+    return chart.addCandlestickSeries();
+  }
+  if (typeof chart.createSeries === "function") {
+    return chart.createSeries("Candlestick", {});
+  }
+  throw new Error("Candlestick series API not found (lightweight-charts)");
+}
+
+function addHistogram(chart: any, options: any) {
+  if (typeof chart.addHistogramSeries === "function") {
+    return chart.addHistogramSeries(options);
+  }
+  if (typeof chart.createSeries === "function") {
+    return chart.createSeries("Histogram", options);
+  }
+  throw new Error("Histogram series API not found (lightweight-charts)");
+}
+
+function addLine(chart: any, options: any) {
+  if (typeof chart.addLineSeries === "function") {
+    return chart.addLineSeries(options);
+  }
+  if (typeof chart.createSeries === "function") {
+    return chart.createSeries("Line", options);
+  }
+  throw new Error("Line series API not found (lightweight-charts)");
 }
 
 export default function StockChart({ ticker }: { ticker: string }) {
@@ -25,7 +51,6 @@ export default function StockChart({ ticker }: { ticker: string }) {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [err, setErr] = useState<string>("");
 
-  // データ取得
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -52,7 +77,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
   const rsi14 = useMemo(() => rsi(closeArr, 14), [closeArr]);
   const m = useMemo(() => macd(closeArr, 12, 26, 9), [closeArr]);
 
-  // メインチャート（ロウソク + 出来高 + MA + BB）
+  // メインチャート
   useEffect(() => {
     if (!containerRef.current) return;
     if (candles.length < 5) return;
@@ -61,7 +86,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
     el.innerHTML = "";
 
     const chart = createChart(el, {
-      width: el.clientWidth || 800, // ★幅0対策
+      width: el.clientWidth || 800,
       height: 420,
       layout: {
         background: { type: ColorType.Solid, color: "white" },
@@ -72,19 +97,19 @@ export default function StockChart({ ticker }: { ticker: string }) {
       timeScale: { borderVisible: false },
     });
 
-    const candleSeries = chart.addCandlestickSeries();
+    const candleSeries = addCandles(chart);
 
-    const volumeSeries = chart.addHistogramSeries({
+    const volumeSeries = addHistogram(chart, {
       priceFormat: { type: "volume" },
       priceScaleId: "",
       scaleMargins: { top: 0.75, bottom: 0 },
     });
 
-    const ma20Series = chart.addLineSeries({ lineWidth: 2 });
-    const ma50Series = chart.addLineSeries({ lineWidth: 2 });
-    const bbU = chart.addLineSeries({ lineWidth: 1 });
-    const bbM = chart.addLineSeries({ lineWidth: 1 });
-    const bbL = chart.addLineSeries({ lineWidth: 1 });
+    const ma20Series = addLine(chart, { lineWidth: 2 });
+    const ma50Series = addLine(chart, { lineWidth: 2 });
+    const bbU = addLine(chart, { lineWidth: 1 });
+    const bbM = addLine(chart, { lineWidth: 1 });
+    const bbL = addLine(chart, { lineWidth: 1 });
 
     candleSeries.setData(
       candles.map((c) => ({
@@ -126,7 +151,6 @@ export default function StockChart({ ticker }: { ticker: string }) {
         )
         .filter(Boolean) as any
     );
-
     bbM.setData(
       candles
         .map((c, i) =>
@@ -134,7 +158,6 @@ export default function StockChart({ ticker }: { ticker: string }) {
         )
         .filter(Boolean) as any
     );
-
     bbL.setData(
       candles
         .map((c, i) =>
@@ -145,9 +168,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
 
     chart.timeScale().fitContent();
 
-    const onResize = () => {
-      chart.applyOptions({ width: el.clientWidth || 800 }); // ★幅0対策
-    };
+    const onResize = () => chart.applyOptions({ width: el.clientWidth || 800 });
     window.addEventListener("resize", onResize);
     onResize();
 
@@ -166,7 +187,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
     el.innerHTML = "";
 
     const chart = createChart(el, {
-      width: el.clientWidth || 800, // ★幅0対策
+      width: el.clientWidth || 800,
       height: 160,
       layout: {
         background: { type: ColorType.Solid, color: "white" },
@@ -177,7 +198,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
       grid: { vertLines: { visible: false }, horzLines: { visible: false } },
     });
 
-    const s = chart.addLineSeries({ lineWidth: 2 });
+    const s = addLine(chart, { lineWidth: 2 });
 
     s.setData(
       candles
@@ -189,9 +210,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
 
     chart.timeScale().fitContent();
 
-    const onResize = () => {
-      chart.applyOptions({ width: el.clientWidth || 800 }); // ★幅0対策
-    };
+    const onResize = () => chart.applyOptions({ width: el.clientWidth || 800 });
     window.addEventListener("resize", onResize);
     onResize();
 
@@ -201,7 +220,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
     };
   }, [candles, rsi14]);
 
-  // MACD（line/signal/hist）
+  // MACD
   useEffect(() => {
     if (!macdRef.current) return;
     if (candles.length < 10) return;
@@ -210,7 +229,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
     el.innerHTML = "";
 
     const chart = createChart(el, {
-      width: el.clientWidth || 800, // ★幅0対策
+      width: el.clientWidth || 800,
       height: 200,
       layout: {
         background: { type: ColorType.Solid, color: "white" },
@@ -221,9 +240,9 @@ export default function StockChart({ ticker }: { ticker: string }) {
       grid: { vertLines: { visible: false }, horzLines: { visible: false } },
     });
 
-    const hist = chart.addHistogramSeries({ priceScaleId: "" });
-    const line = chart.addLineSeries({ lineWidth: 2 });
-    const sig = chart.addLineSeries({ lineWidth: 2 });
+    const hist = addHistogram(chart, { priceScaleId: "" });
+    const line = addLine(chart, { lineWidth: 2 });
+    const sig = addLine(chart, { lineWidth: 2 });
 
     hist.setData(
       candles
@@ -251,9 +270,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
 
     chart.timeScale().fitContent();
 
-    const onResize = () => {
-      chart.applyOptions({ width: el.clientWidth || 800 }); // ★幅0対策
-    };
+    const onResize = () => chart.applyOptions({ width: el.clientWidth || 800 });
     window.addEventListener("resize", onResize);
     onResize();
 
@@ -270,7 +287,6 @@ export default function StockChart({ ticker }: { ticker: string }) {
         <div className="muted">ticker: {ticker}</div>
       </div>
 
-      {/* ★追加：データ件数を可視化 */}
       <div className="muted" style={{ marginTop: 6 }}>
         candles: {candles.length}件
       </div>
@@ -282,7 +298,6 @@ export default function StockChart({ ticker }: { ticker: string }) {
       ) : null}
 
       <div style={{ marginTop: 10 }}>
-        {/* ★追加：minHeightで描画領域を確保 */}
         <div ref={containerRef} style={{ minHeight: 420 }} />
       </div>
 
