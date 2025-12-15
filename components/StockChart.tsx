@@ -263,6 +263,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
 
   return (
     <div className="card">
+      <div className="muted">StockChart DEBUG: ca0bd30 / RSI-MACD版</div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <div style={{ fontWeight: 800, fontSize: 18 }}>チャート（日足）</div>
         <div className="muted">ticker: {ticker}</div>
